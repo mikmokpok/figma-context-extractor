@@ -7,7 +7,7 @@
         "resolveJsonModule": true,
         "allowJs": true,
         "noEmit": true,
-        "composite": false,
+        "composite": true,
         "incremental": true,
         "tsBuildInfoFile": ".tsbuildinfo",
         "removeComments": false,
