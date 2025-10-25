@@ -1,5 +1,5 @@
 {
-    "name": "@justpoint/figma-metadata-extractor",
+    "name": "figma-metadata-extractor",
     "version": "1.0.0",
     "description": "Extract metadata and download images from Figma files. A standalone library for accessing Figma design data programmatically.",
     "type": "module",
