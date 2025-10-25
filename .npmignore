@@ -1,0 +1,23 @@
+# Source files
+src/
+tsconfig.json
+tsup.config.ts
+
+# Development files
+.gitignore
+.eslintrc.*
+.prettierrc.*
+jest.config.*
+
+# Documentation (except README.md)
+MIGRATION.md
+
+# Example files
+example.js
+
+# Build artifacts
+*.tsbuildinfo
+
+# Tests
+**/*.test.ts
+**/*.spec.ts
