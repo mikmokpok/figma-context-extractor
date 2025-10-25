@@ -32,7 +32,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/your-username/figma-metadata-extractor.git"
+        "url": "git+https://github.com/mikmokpok/figma-context-extractor.git"
     },
     "keywords": [
         "figma",
