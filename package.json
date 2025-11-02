@@ -8,9 +8,9 @@
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
+            "types": "./dist/index.d.ts",
             "import": "./dist/index.js",
-            "require": "./dist/index.cjs",
-            "types": "./dist/index.d.ts"
+            "require": "./dist/index.cjs"
         }
     },
     "files": [
@@ -19,7 +19,7 @@
         "example.js"
     ],
     "scripts": {
-        "build": "vite build && tsc --emitDeclarationOnly --outDir dist",
+        "build": "vite build && tsc --project tsconfig.declarations.json",
         "typecheck": "tsc --noEmit",
         "test": "jest",
         "dev": "vite build --watch",
