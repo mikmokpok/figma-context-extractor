@@ -58,6 +58,23 @@ export interface FigmaImageResult {
     cssVariables?: string;
 }
 
+export interface FigmaFrameImageOptions {
+    /** The Figma API key (Personal Access Token) */
+    apiKey?: string;
+    /** The Figma OAuth Bearer token */
+    oauthToken?: string;
+    /** Whether to use OAuth instead of API key */
+    useOAuth?: boolean;
+    /** Export scale for PNG images (defaults to 2) */
+    pngScale?: number;
+    /** The absolute path to the directory where the image should be stored */
+    localPath: string;
+    /** The filename for the downloaded image (must end with .png or .svg) */
+    fileName: string;
+    /** Image format to download (defaults to 'png') */
+    format?: 'png' | 'svg';
+}
+
 /**
  * Extract metadata from a Figma file or specific nodes
  * 
@@ -181,6 +198,82 @@ export async function downloadFigmaImages(
     } catch (error) {
         Logger.error(`Error downloading images from ${fileKey}:`, error);
         throw new Error(`Failed to download images: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
+/**
+ * Download a frame image from a Figma URL
+ * 
+ * @param figmaUrl - The Figma URL containing the frame (with node-id parameter)
+ * @param options - Configuration options including API credentials, local path, and filename
+ * @returns Promise resolving to the download result
+ */
+export async function downloadFigmaFrameImage(
+    figmaUrl: string,
+    options: FigmaFrameImageOptions
+): Promise<FigmaImageResult> {
+    const {
+        apiKey,
+        oauthToken,
+        useOAuth = false,
+        pngScale = 2,
+        localPath,
+        fileName,
+        format = 'png'
+    } = options;
+
+    if (!apiKey && !oauthToken) {
+        throw new Error("Either apiKey or oauthToken is required");
+    }
+
+    const urlMatch = figmaUrl.match(/figma\.com\/(file|design)\/([a-zA-Z0-9]+)/);
+    if (!urlMatch) {
+        throw new Error("Invalid Figma URL format");
+    }
+
+    const fileKey = urlMatch[2];
+
+    // Extract node ID from URL
+    const nodeIdMatch = figmaUrl.match(/node-id=([^&]+)/);
+    if (!nodeIdMatch) {
+        throw new Error("No frame node-id found in URL. Please provide a Figma URL with a node-id parameter (e.g., ?node-id=123-456)");
+    }
+
+    const nodeId = nodeIdMatch[1].replace(/-/g, ":");
+
+    // Validate filename extension matches format
+    const expectedExtension = `.${format}`;
+    if (!fileName.toLowerCase().endsWith(expectedExtension)) {
+        throw new Error(`Filename must end with ${expectedExtension} for ${format} format`);
+    }
+
+    const figmaService = new FigmaService({
+        figmaApiKey: apiKey || "",
+        figmaOAuthToken: oauthToken || "",
+        useOAuth: useOAuth && !!oauthToken,
+    });
+
+    try {
+        Logger.log(`Downloading ${format.toUpperCase()} image for frame ${nodeId} from file ${fileKey}`);
+
+        const imageNode: FigmaImageNode = {
+            nodeId,
+            fileName,
+        };
+
+        const results = await figmaService.downloadImages(fileKey, localPath, [imageNode], {
+            pngScale: format === 'png' ? pngScale : undefined,
+        });
+
+        if (results.length === 0) {
+            throw new Error(`Failed to download image for frame ${nodeId}`);
+        }
+
+        Logger.log(`Successfully downloaded frame image to: ${results[0].filePath}`);
+        return results[0];
+    } catch (error) {
+        Logger.error(`Error downloading frame image from ${fileKey}:`, error);
+        throw new Error(`Failed to download frame image: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

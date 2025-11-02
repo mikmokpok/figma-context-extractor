@@ -1,7 +1,7 @@
 {
     "name": "figma-metadata-extractor",
-    "version": "1.0.1",
-    "description": "Extract metadata and download images from Figma files. A standalone library for accessing Figma design data programmatically.",
+    "version": "1.0.2",
+    "description": "Extract metadata and download images from Figma files. A standalone library for accessing Figma design data and downloading frame images programmatically.",
     "type": "module",
     "main": "dist/index.cjs",
     "module": "dist/index.js",

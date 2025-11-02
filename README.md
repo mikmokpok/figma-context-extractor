@@ -11,7 +11,7 @@ npm install figma-metadata-extractor
 ## Quick Start
 
 ```typescript
-import { getFigmaMetadata, downloadFigmaImages } from 'figma-metadata-extractor';
+import { getFigmaMetadata, downloadFigmaImages, downloadFigmaFrameImage } from 'figma-metadata-extractor';
 
 // Extract metadata from a Figma file
 const metadata = await getFigmaMetadata(
@@ -45,6 +45,20 @@ const images = await downloadFigmaImages(
 );
 
 console.log(images); // Array of download results
+
+// Download a single frame image from a Figma URL
+const frameImage = await downloadFigmaFrameImage(
+  'https://figma.com/file/ABC123/My-Design?node-id=1234-5678',
+  {
+    apiKey: 'your-figma-api-key',
+    localPath: './assets/frames',
+    fileName: 'my-frame.png',
+    format: 'png', // or 'svg'
+    pngScale: 2
+  }
+);
+
+console.log(frameImage.filePath); // Path to downloaded image
 ```
 
 ## API Reference
@@ -90,6 +104,25 @@ Downloads SVG and PNG images from a Figma file.
 
 **Returns:** Promise<FigmaImageResult[]>
 
+### `downloadFigmaFrameImage(figmaUrl, options)`
+
+Downloads a single frame image from a Figma URL that contains a node-id parameter.
+
+**Parameters:**
+- `figmaUrl` (string): The Figma URL with node-id parameter (e.g., `https://figma.com/file/ABC123/My-Design?node-id=1234-5678`)
+- `options` (FigmaFrameImageOptions): Configuration options
+
+**Options:**
+- `apiKey?: string` - Figma API key (Personal Access Token)
+- `oauthToken?: string` - Figma OAuth Bearer token  
+- `useOAuth?: boolean` - Whether to use OAuth instead of API key
+- `localPath: string` - Absolute path to save the image
+- `fileName: string` - Local filename (must end with .png or .svg)
+- `format?: 'png' | 'svg'` - Image format to download (default: 'png')
+- `pngScale?: number` - Export scale for PNG images (default: 2)
+
+**Returns:** Promise<FigmaImageResult>
+
 ## Authentication
 
 You need either a Figma API key or OAuth token:
@@ -103,6 +136,50 @@ You need either a Figma API key or OAuth token:
 1. Set up Figma OAuth in your application
 2. Use the bearer token in the `oauthToken` option
 3. Set `useOAuth: true`
+
+## Usage Examples
+
+### Download Frame Image from Figma URL
+
+The easiest way to download a frame image is to copy the Figma URL directly from your browser when viewing a specific frame:
+
+```typescript
+import { downloadFigmaFrameImage } from 'figma-metadata-extractor';
+
+// Copy this URL from Figma when viewing a frame
+const figmaUrl = 'https://www.figma.com/design/ABC123/My-Design?node-id=1234-5678&t=xyz123';
+
+const result = await downloadFigmaFrameImage(figmaUrl, {
+  apiKey: 'your-figma-api-key',
+  localPath: './downloads',
+  fileName: 'my-frame.png',
+  format: 'png',
+  pngScale: 2 // High resolution
+});
+
+console.log(`Downloaded to: ${result.filePath}`);
+console.log(`Dimensions: ${result.finalDimensions.width}x${result.finalDimensions.height}`);
+```
+
+### Download Multiple Frame Images
+
+```typescript
+import { downloadFigmaImages } from 'figma-metadata-extractor';
+
+// For multiple frames, use the batch download function
+const results = await downloadFigmaImages(
+  'https://figma.com/file/ABC123/My-Design',
+  [
+    { nodeId: '1234:5678', fileName: 'frame1.png' },
+    { nodeId: '9876:5432', fileName: 'frame2.svg' },
+    { nodeId: '1111:2222', fileName: 'frame3.png' }
+  ],
+  {
+    apiKey: 'your-figma-api-key',
+    localPath: './frames'
+  }
+);
+```
 
 ## Advanced Usage
 

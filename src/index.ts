@@ -1,8 +1,10 @@
 export {
     getFigmaMetadata,
     downloadFigmaImages,
+    downloadFigmaFrameImage,
     type FigmaMetadataOptions,
     type FigmaImageOptions,
+    type FigmaFrameImageOptions,
     type FigmaImageNode,
     type FigmaMetadataResult,
     type FigmaImageResult,
