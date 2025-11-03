@@ -10,8 +10,28 @@ npm install figma-metadata-extractor
 
 ## Quick Start
 
+### Get Metadata with Auto-Downloaded Images (LLM-Ready!)
+
 ```typescript
-import { getFigmaMetadata, downloadFigmaImages, downloadFigmaFrameImage } from 'figma-metadata-extractor';
+import { getFigmaMetadata } from 'figma-metadata-extractor';
+
+// Extract metadata AND automatically download image assets
+const metadata = await getFigmaMetadata(
+  'https://figma.com/file/ABC123/My-Design',
+  {
+    apiKey: 'your-figma-api-key',
+    outputFormat: 'object',
+    downloadImages: true,        // Auto-download image assets
+    localPath: './assets/images' // Where to save images
+  }
+);
+
+```
+
+### Get Metadata Only (No Downloads)
+
+```typescript
+import { getFigmaMetadata } from 'figma-metadata-extractor';
 
 // Extract metadata from a Figma file
 const metadata = await getFigmaMetadata(
@@ -77,8 +97,23 @@ Extracts comprehensive metadata from a Figma file including layout, content, vis
 - `useOAuth?: boolean` - Whether to use OAuth instead of API key
 - `outputFormat?: 'json' | 'yaml' | 'object'` - Output format (default: 'object')
 - `depth?: number` - Maximum depth to traverse the node tree
+- `downloadImages?: boolean` - Automatically download image assets and enrich metadata (default: false)
+- `localPath?: string` - Local path for downloaded images (required if downloadImages is true)
+- `imageFormat?: 'png' | 'svg'` - Image format for downloads (default: 'png')
+- `pngScale?: number` - Export scale for PNG images (default: 2)
 
 **Returns:** Promise<FigmaMetadataResult | string>
+
+When `downloadImages` is true, nodes with image assets will include a `downloadedImage` property:
+```typescript
+{
+  filePath: string;           // Absolute path
+  relativePath: string;       // Relative path for code
+  dimensions: { width, height };
+  markdown: string;           // ![name](path)
+  html: string;              // <img src="..." />
+}
+```
 
 ### `downloadFigmaImages(figmaUrl, nodes, options)`
 

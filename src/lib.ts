@@ -19,6 +19,14 @@ export interface FigmaMetadataOptions {
     outputFormat?: "json" | "yaml" | "object";
     /** Maximum depth to traverse the node tree */
     depth?: number;
+    /** Automatically download image assets and enrich metadata with file paths */
+    downloadImages?: boolean;
+    /** Local path for downloaded images (required if downloadImages is true) */
+    localPath?: string;
+    /** Image format for downloads (defaults to 'png') */
+    imageFormat?: 'png' | 'svg';
+    /** Export scale for PNG images (defaults to 2) */
+    pngScale?: number;
 }
 
 export interface FigmaImageOptions {
@@ -86,7 +94,17 @@ export async function getFigmaMetadata(
     figmaUrl: string,
     options: FigmaMetadataOptions = {}
 ): Promise<FigmaMetadataResult | string> {
-    const { apiKey, oauthToken, useOAuth = false, outputFormat = "object", depth } = options;
+    const {
+        apiKey,
+        oauthToken,
+        useOAuth = false,
+        outputFormat = "object",
+        depth,
+        downloadImages = false,
+        localPath,
+        imageFormat = 'png',
+        pngScale = 2
+    } = options;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");
@@ -132,11 +150,44 @@ export async function getFigmaMetadata(
         );
 
         const { nodes, globalVars, ...metadata } = simplifiedDesign;
-        const result = {
+        let result = {
             metadata,
             nodes,
             globalVars,
         };
+
+        // Optionally download images and enrich metadata
+        if (downloadImages) {
+            if (!localPath) {
+                throw new Error("localPath is required when downloadImages is true");
+            }
+
+            Logger.log("Discovering and downloading image assets...");
+
+            // Find all image assets
+            const imageAssets = findImageAssets(nodes, globalVars);
+            Logger.log(`Found ${imageAssets.length} image assets to download`);
+
+            if (imageAssets.length > 0) {
+                // Download images
+                const imageNodes: FigmaImageNode[] = imageAssets.map(asset => ({
+                    nodeId: asset.id,
+                    fileName: sanitizeFileName(asset.name) + `.${imageFormat}`
+                }));
+
+                const downloadResults = await figmaService.downloadImages(
+                    fileKey,
+                    localPath,
+                    imageNodes,
+                    { pngScale: imageFormat === 'png' ? pngScale : undefined }
+                );
+
+                // Enrich nodes with download info
+                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults);
+
+                Logger.log(`Successfully downloaded and enriched ${downloadResults.length} images`);
+            }
+        }
 
         if (outputFormat === "json") {
             return JSON.stringify(result, null, 2);
@@ -275,6 +326,83 @@ export async function downloadFigmaFrameImage(
         Logger.error(`Error downloading frame image from ${fileKey}:`, error);
         throw new Error(`Failed to download frame image: ${error instanceof Error ? error.message : String(error)}`);
     }
+}
+
+// Helper functions
+
+function sanitizeFileName(name: string): string {
+    return name
+        .replace(/[^a-z0-9]/gi, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .toLowerCase();
+}
+
+function findImageAssets(nodes: any[], globalVars: any): any[] {
+    const images: any[] = [];
+
+    function traverse(node: any) {
+        const isImageAsset =
+            node.type === 'IMAGE-SVG' ||
+            hasImageFill(node, globalVars);
+
+        if (isImageAsset) {
+            images.push(node);
+        }
+
+        if (node.children && Array.isArray(node.children)) {
+            node.children.forEach(traverse);
+        }
+    }
+
+    nodes.forEach(traverse);
+    return images;
+}
+
+function hasImageFill(node: any, globalVars: any): boolean {
+    if (!node.fills || typeof node.fills !== 'string') {
+        return false;
+    }
+
+    const fillData = globalVars?.styles?.[node.fills];
+    if (!fillData || !Array.isArray(fillData)) {
+        return false;
+    }
+
+    return fillData.some((fill: any) => fill?.type === 'IMAGE');
+}
+
+function enrichNodesWithImages(nodes: any[], imageAssets: any[], downloadResults: any[]): any[] {
+    const imageMap = new Map();
+    imageAssets.forEach((asset, index) => {
+        const result = downloadResults[index];
+        if (result) {
+            imageMap.set(asset.id, {
+                filePath: result.filePath,
+                relativePath: result.filePath.replace(process.cwd(), '.'),
+                dimensions: result.finalDimensions,
+                wasCropped: result.wasCropped,
+                markdown: `![${asset.name}](${result.filePath.replace(process.cwd(), '.')})`,
+                html: `<img src="${result.filePath.replace(process.cwd(), '.')}" alt="${asset.name}" width="${result.finalDimensions.width}" height="${result.finalDimensions.height}">`
+            });
+        }
+    });
+
+    function enrichNode(node: any): any {
+        const enriched = { ...node };
+
+        if (imageMap.has(node.id)) {
+            enriched.downloadedImage = imageMap.get(node.id);
+        }
+
+        if (node.children && Array.isArray(node.children)) {
+            enriched.children = node.children.map(enrichNode);
+        }
+
+        return enriched;
+    }
+
+    return nodes.map(enrichNode);
 }
 
 export type { SimplifiedDesign } from "./extractors/types.js";
