@@ -35,6 +35,8 @@ export interface FigmaMetadataOptions {
      * Default: true
      */
     useRelativePaths?: boolean | string;
+    /** Enable JSON debug log files (defaults to false) */
+    enableLogging?: boolean;
 }
 
 export interface FigmaImageOptions {
@@ -89,6 +91,8 @@ export interface FigmaFrameImageOptions {
     fileName: string;
     /** Image format to download (defaults to 'png') */
     format?: 'png' | 'svg';
+    /** Enable JSON debug log files (defaults to false) */
+    enableLogging?: boolean;
 }
 
 /**
@@ -112,8 +116,11 @@ export async function getFigmaMetadata(
         localPath,
         imageFormat = 'png',
         pngScale = 2,
-        useRelativePaths = true
+        useRelativePaths = true,
+        enableLogging = false
     } = options;
+
+    Logger.enableLogging = enableLogging;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");
@@ -225,7 +232,9 @@ export async function downloadFigmaImages(
     nodes: FigmaImageNode[],
     options: FigmaMetadataOptions & FigmaImageOptions
 ): Promise<FigmaImageResult[]> {
-    const { apiKey, oauthToken, useOAuth = false, pngScale = 2, localPath } = options;
+    const { apiKey, oauthToken, useOAuth = false, pngScale = 2, localPath, enableLogging = false } = options;
+
+    Logger.enableLogging = enableLogging;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");
@@ -279,8 +288,11 @@ export async function downloadFigmaFrameImage(
         pngScale = 2,
         localPath,
         fileName,
-        format = 'png'
+        format = 'png',
+        enableLogging = false
     } = options;
+
+    Logger.enableLogging = enableLogging;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");

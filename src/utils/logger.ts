@@ -2,6 +2,7 @@ import fs from "fs";
 
 export const Logger = {
   isHTTP: false,
+  enableLogging: false,
   log: (...args: any[]) => {
     if (Logger.isHTTP) {
       console.log("[INFO]", ...args);
@@ -15,6 +16,7 @@ export const Logger = {
 };
 
 export function writeLogs(name: string, value: any): void {
+  if (!Logger.enableLogging) return;
   if (process.env.NODE_ENV !== "development") return;
 
   try {
