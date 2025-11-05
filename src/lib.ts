@@ -27,6 +27,13 @@ export interface FigmaMetadataOptions {
     imageFormat?: 'png' | 'svg';
     /** Export scale for PNG images (defaults to 2) */
     pngScale?: number;
+    /** 
+     * Use relative paths in downloadedImage properties instead of absolute paths.
+     * If true, paths will be relative to process.cwd().
+     * If a string, paths will be relative to that base path.
+     * Default: true
+     */
+    useRelativePaths?: boolean | string;
 }
 
 export interface FigmaImageOptions {
@@ -103,7 +110,8 @@ export async function getFigmaMetadata(
         downloadImages = false,
         localPath,
         imageFormat = 'png',
-        pngScale = 2
+        pngScale = 2,
+        useRelativePaths = true
     } = options;
 
     if (!apiKey && !oauthToken) {
@@ -183,7 +191,7 @@ export async function getFigmaMetadata(
                 );
 
                 // Enrich nodes with download info
-                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults);
+                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults, useRelativePaths);
 
                 Logger.log(`Successfully downloaded and enriched ${downloadResults.length} images`);
             }
@@ -372,18 +380,38 @@ function hasImageFill(node: any, globalVars: any): boolean {
     return fillData.some((fill: any) => fill?.type === 'IMAGE');
 }
 
-function enrichNodesWithImages(nodes: any[], imageAssets: any[], downloadResults: any[]): any[] {
+function enrichNodesWithImages(
+    nodes: any[],
+    imageAssets: any[],
+    downloadResults: any[],
+    useRelativePaths: boolean | string = true
+): any[] {
     const imageMap = new Map();
+
     imageAssets.forEach((asset, index) => {
         const result = downloadResults[index];
         if (result) {
+            // Calculate the path to use based on useRelativePaths option
+            let pathForMarkup: string;
+
+            if (useRelativePaths === false) {
+                // Use absolute path
+                pathForMarkup = result.filePath;
+            } else if (typeof useRelativePaths === 'string') {
+                // Use custom base path
+                pathForMarkup = result.filePath.replace(useRelativePaths, '.');
+            } else {
+                // Use path relative to cwd
+                pathForMarkup = result.filePath.replace(process.cwd(), '.');
+            }
+
             imageMap.set(asset.id, {
                 filePath: result.filePath,
-                relativePath: result.filePath.replace(process.cwd(), '.'),
+                relativePath: pathForMarkup,
                 dimensions: result.finalDimensions,
                 wasCropped: result.wasCropped,
-                markdown: `![${asset.name}](${result.filePath.replace(process.cwd(), '.')})`,
-                html: `<img src="${result.filePath.replace(process.cwd(), '.')}" alt="${asset.name}" width="${result.finalDimensions.width}" height="${result.finalDimensions.height}">`
+                markdown: `![${asset.name}](${pathForMarkup})`,
+                html: `<img src="${pathForMarkup}" alt="${asset.name}" width="${result.finalDimensions.width}" height="${result.finalDimensions.height}">`
             });
         }
     });
