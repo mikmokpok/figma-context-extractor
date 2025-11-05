@@ -28,9 +28,10 @@ export interface FigmaMetadataOptions {
     /** Export scale for PNG images (defaults to 2) */
     pngScale?: number;
     /** 
-     * Use relative paths in downloadedImage properties instead of absolute paths.
-     * If true, paths will be relative to process.cwd().
-     * If a string, paths will be relative to that base path.
+     * Control how image paths are generated in downloadedImage properties.
+     * - true (default): Just the filename (e.g., "./icon.png")
+     * - false: Absolute file path (e.g., "/absolute/path/to/images/icon.png")
+     * - string: Strip this base path from file path (e.g., "/var/www" → "./images/icon.png")
      * Default: true
      */
     useRelativePaths?: boolean | string;
@@ -191,7 +192,7 @@ export async function getFigmaMetadata(
                 );
 
                 // Enrich nodes with download info
-                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults, useRelativePaths);
+                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults, useRelativePaths, localPath);
 
                 Logger.log(`Successfully downloaded and enriched ${downloadResults.length} images`);
             }
@@ -384,7 +385,8 @@ function enrichNodesWithImages(
     nodes: any[],
     imageAssets: any[],
     downloadResults: any[],
-    useRelativePaths: boolean | string = true
+    useRelativePaths: boolean | string = true,
+    localPath?: string
 ): any[] {
     const imageMap = new Map();
 
@@ -398,11 +400,21 @@ function enrichNodesWithImages(
                 // Use absolute path
                 pathForMarkup = result.filePath;
             } else if (typeof useRelativePaths === 'string') {
-                // Use custom base path
-                pathForMarkup = result.filePath.replace(useRelativePaths, '.');
+                // Custom base path to strip from the file path
+                const basePath = useRelativePaths.endsWith('/') ? useRelativePaths : useRelativePaths + '/';
+                const normalizedFilePath = result.filePath.replace(/\\/g, '/');
+                const normalizedBasePath = basePath.replace(/\\/g, '/');
+
+                if (normalizedFilePath.startsWith(normalizedBasePath)) {
+                    pathForMarkup = './' + normalizedFilePath.substring(normalizedBasePath.length);
+                } else {
+                    // Fallback: just use filename
+                    pathForMarkup = './' + result.filePath.split(/[/\\]/).pop();
+                }
             } else {
-                // Use path relative to cwd
-                pathForMarkup = result.filePath.replace(process.cwd(), '.');
+                // Default (true): just use the filename
+                const fileName = result.filePath.split(/[/\\]/).pop();
+                pathForMarkup = './' + fileName;
             }
 
             imageMap.set(asset.id, {
