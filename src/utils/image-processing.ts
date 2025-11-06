@@ -153,7 +153,7 @@ export async function downloadAndProcessImage(
     // When returning buffer, we need to process it with sharp
     Logger.log(`Downloaded image as buffer (${downloadResult.byteLength} bytes)`);
 
-    let imageBuffer = Buffer.from(downloadResult);
+    let imageBuffer: Buffer = Buffer.from(downloadResult);
     let sharpImage = sharp(imageBuffer);
 
     // Get original dimensions
@@ -190,7 +190,7 @@ export async function downloadAndProcessImage(
 
       if (cropWidth > 0 && cropHeight > 0) {
         cropRegion = { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight };
-        imageBuffer = await sharpImage
+        const croppedBuffer = await sharpImage
           .extract({
             left: cropLeft,
             top: cropTop,
@@ -199,6 +199,7 @@ export async function downloadAndProcessImage(
           })
           .toBuffer();
 
+        imageBuffer = croppedBuffer;
         wasCropped = true;
         finalDimensions = { width: cropWidth, height: cropHeight };
         Logger.log(`Cropped to region: ${cropLeft}, ${cropTop}, ${cropWidth}x${cropHeight}`);
@@ -212,7 +213,7 @@ export async function downloadAndProcessImage(
     }
 
     return {
-      buffer: imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength),
+      buffer: imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength) as ArrayBuffer,
       originalDimensions,
       finalDimensions,
       wasCropped,
