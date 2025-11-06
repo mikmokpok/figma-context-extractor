@@ -112,6 +112,18 @@ export interface FigmaFrameImageOptions {
  */
 export async function getFigmaMetadata(
     figmaUrl: string,
+    options: FigmaMetadataOptions & { outputFormat: 'json' }
+): Promise<string>;
+export async function getFigmaMetadata(
+    figmaUrl: string,
+    options: FigmaMetadataOptions & { outputFormat: 'yaml' }
+): Promise<string>;
+export async function getFigmaMetadata(
+    figmaUrl: string,
+    options?: FigmaMetadataOptions
+): Promise<FigmaMetadataResult>;
+export async function getFigmaMetadata(
+    figmaUrl: string,
     options: FigmaMetadataOptions = {}
 ): Promise<FigmaMetadataResult | string> {
     const {
