@@ -8,6 +8,15 @@ A TypeScript library for extracting metadata and downloading images from Figma f
 npm install figma-metadata-extractor
 ```
 
+## Features
+
+- 🎨 Extract comprehensive metadata from Figma files
+- 📦 Auto-download image assets (to disk or as buffers)
+- 🔄 Support for both file-based and buffer-based workflows
+- 🎯 Enrich metadata with image paths and markup
+- 🔐 Support for both API keys and OAuth tokens
+- 📝 Multiple output formats (JSON, YAML, object)
+
 ## Quick Start
 
 ### Get Metadata with Auto-Downloaded Images (LLM-Ready!)
@@ -15,7 +24,7 @@ npm install figma-metadata-extractor
 ```typescript
 import { getFigmaMetadata } from 'figma-metadata-extractor';
 
-// Extract metadata AND automatically download image assets
+// Extract metadata AND automatically download image assets to disk
 const metadata = await getFigmaMetadata(
   'https://figma.com/file/ABC123/My-Design',
   {
@@ -26,6 +35,55 @@ const metadata = await getFigmaMetadata(
   }
 );
 
+// Nodes are enriched with downloadedImage property
+metadata.nodes.forEach(node => {
+  if (node.downloadedImage) {
+    console.log(node.downloadedImage.filePath);
+    console.log(node.downloadedImage.markdown); // ![name](path)
+  }
+});
+```
+
+### Get Images as Buffers (No Disk Write)
+
+```typescript
+import { getFigmaMetadata, enrichMetadataWithImages } from 'figma-metadata-extractor';
+import fs from 'fs/promises';
+
+// Get metadata with images as ArrayBuffers
+const result = await getFigmaMetadata(
+  'https://figma.com/file/ABC123/My-Design',
+  {
+    apiKey: 'your-figma-api-key',
+    downloadImages: true,
+    returnBuffer: true  // Get images as ArrayBuffer
+  }
+);
+
+// Images are returned separately, metadata is not enriched
+console.log(`Downloaded ${result.images.length} images as buffers`);
+
+// Process buffers (upload to S3, convert format, etc.)
+const savedPaths: string[] = [];
+for (const image of result.images) {
+  // Example: Save to disk after processing
+  const buffer = Buffer.from(image.buffer);
+  const path = `./processed/${Date.now()}.png`;
+  await fs.writeFile(path, buffer);
+  savedPaths.push(path);
+}
+
+// Optionally enrich metadata with saved file paths
+const enrichedMetadata = enrichMetadataWithImages(result, savedPaths, {
+  useRelativePaths: true
+});
+
+// Now nodes have downloadedImage properties
+enrichedMetadata.nodes.forEach(node => {
+  if (node.downloadedImage) {
+    console.log(node.downloadedImage.markdown);
+  }
+});
 ```
 
 ### Get Metadata Only (No Downloads)
@@ -98,13 +156,25 @@ Extracts comprehensive metadata from a Figma file including layout, content, vis
 - `outputFormat?: 'json' | 'yaml' | 'object'` - Output format (default: 'object')
 - `depth?: number` - Maximum depth to traverse the node tree
 - `downloadImages?: boolean` - Automatically download image assets and enrich metadata (default: false)
-- `localPath?: string` - Local path for downloaded images (required if downloadImages is true)
+- `localPath?: string` - Local path for downloaded images (optional if returnBuffer is true)
 - `imageFormat?: 'png' | 'svg'` - Image format for downloads (default: 'png')
 - `pngScale?: number` - Export scale for PNG images (default: 2)
+- `returnBuffer?: boolean` - Return images as ArrayBuffer instead of saving to disk (default: false)
+- `enableLogging?: boolean` - Enable JSON debug log files (default: false)
 
 **Returns:** Promise<FigmaMetadataResult | string>
 
-When `downloadImages` is true, nodes with image assets will include a `downloadedImage` property:
+**FigmaMetadataResult:**
+```typescript
+{
+  metadata: any;              // File metadata
+  nodes: any[];               // Design nodes
+  globalVars: any;            // Styles, colors, etc.
+  images?: FigmaImageResult[]; // Only present when downloadImages: true and returnBuffer: true
+}
+```
+
+When `downloadImages: true` and `returnBuffer: false`, nodes with image assets will include a `downloadedImage` property:
 ```typescript
 {
   filePath: string;           // Absolute path
@@ -114,6 +184,8 @@ When `downloadImages` is true, nodes with image assets will include a `downloade
   html: string;              // <img src="..." />
 }
 ```
+
+When `downloadImages: true` and `returnBuffer: true`, images are returned in the `images` array and nodes are NOT enriched. Use `enrichMetadataWithImages()` to enrich them later after saving buffers to disk.
 
 ### `downloadFigmaImages(figmaUrl, nodes, options)`
 
@@ -142,6 +214,42 @@ Downloads SVG and PNG images from a Figma file.
 **Returns:** Promise<FigmaImageResult[]>
 
 When `returnBuffer` is true, each result will contain a `buffer` property instead of `filePath`.
+
+### `enrichMetadataWithImages(metadata, imagePaths, options)`
+
+Enriches metadata with saved image file paths after saving buffers to disk.
+
+**Parameters:**
+- `metadata` (FigmaMetadataResult): The metadata result from getFigmaMetadata with returnBuffer: true
+- `imagePaths` (string[]): Array of file paths where images were saved (must match order of metadata.images)
+- `options` (object): Configuration options
+  - `useRelativePaths?: boolean | string` - How to generate paths (default: true)
+  - `localPath?: string` - Base path for relative path calculation
+
+**Returns:** FigmaMetadataResult with enriched nodes
+
+**Example:**
+```typescript
+// Get metadata with buffers
+const result = await getFigmaMetadata(url, {
+  apiKey: 'key',
+  downloadImages: true,
+  returnBuffer: true
+});
+
+// Save buffers to disk
+const paths = await Promise.all(
+  result.images.map((img, i) => 
+    fs.writeFile(`./images/img-${i}.png`, Buffer.from(img.buffer))
+      .then(() => `./images/img-${i}.png`)
+  )
+);
+
+// Enrich metadata with file paths
+const enriched = enrichMetadataWithImages(result, paths, {
+  useRelativePaths: true
+});
+```
 
 ### `downloadFigmaFrameImage(figmaUrl, options)`
 

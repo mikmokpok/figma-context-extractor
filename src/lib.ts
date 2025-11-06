@@ -37,6 +37,8 @@ export interface FigmaMetadataOptions {
     useRelativePaths?: boolean | string;
     /** Enable JSON debug log files (defaults to false) */
     enableLogging?: boolean;
+    /** Return images as ArrayBuffer instead of saving to disk (defaults to false) */
+    returnBuffer?: boolean;
 }
 
 export interface FigmaImageOptions {
@@ -69,6 +71,7 @@ export interface FigmaMetadataResult {
     metadata: any;
     nodes: any[];
     globalVars: any;
+    images?: FigmaImageResult[];
 }
 
 export interface FigmaImageResult {
@@ -122,7 +125,8 @@ export async function getFigmaMetadata(
         imageFormat = 'png',
         pngScale = 2,
         useRelativePaths = true,
-        enableLogging = false
+        enableLogging = false,
+        returnBuffer = false
     } = options;
 
     Logger.enableLogging = enableLogging;
@@ -171,7 +175,7 @@ export async function getFigmaMetadata(
         );
 
         const { nodes, globalVars, ...metadata } = simplifiedDesign;
-        let result = {
+        let result: FigmaMetadataResult = {
             metadata,
             nodes,
             globalVars,
@@ -179,8 +183,8 @@ export async function getFigmaMetadata(
 
         // Optionally download images and enrich metadata
         if (downloadImages) {
-            if (!localPath) {
-                throw new Error("localPath is required when downloadImages is true");
+            if (!returnBuffer && !localPath) {
+                throw new Error("localPath is required when downloadImages is true and returnBuffer is false");
             }
 
             Logger.log("Discovering and downloading image assets...");
@@ -198,15 +202,23 @@ export async function getFigmaMetadata(
 
                 const downloadResults = await figmaService.downloadImages(
                     fileKey,
-                    localPath,
+                    localPath || '',
                     imageNodes,
-                    { pngScale: imageFormat === 'png' ? pngScale : undefined }
+                    {
+                        pngScale: imageFormat === 'png' ? pngScale : undefined,
+                        returnBuffer
+                    }
                 );
 
-                // Enrich nodes with download info
-                result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults, useRelativePaths, localPath);
-
-                Logger.log(`Successfully downloaded and enriched ${downloadResults.length} images`);
+                if (returnBuffer) {
+                    // When using buffers, return them separately without enriching metadata
+                    result.images = downloadResults;
+                    Logger.log(`Successfully downloaded ${downloadResults.length} images as buffers`);
+                } else {
+                    // When saving to disk, enrich nodes with file paths
+                    result.nodes = enrichNodesWithImages(nodes, imageAssets, downloadResults, useRelativePaths, localPath);
+                    Logger.log(`Successfully downloaded and enriched ${downloadResults.length} images`);
+                }
             }
         }
 
@@ -371,6 +383,60 @@ export async function downloadFigmaFrameImage(
     }
 }
 
+/**
+ * Enrich metadata with saved image file paths
+ * 
+ * Use this function after saving images from buffers to disk to add file path information to the metadata.
+ * 
+ * @param metadata - The metadata result from getFigmaMetadata
+ * @param imagePaths - Array of file paths corresponding to the images array
+ * @param options - Options for path generation
+ * @returns Enriched metadata with downloadedImage properties on nodes
+ */
+export function enrichMetadataWithImages(
+    metadata: FigmaMetadataResult,
+    imagePaths: string[],
+    options: {
+        useRelativePaths?: boolean | string;
+        localPath?: string;
+    } = {}
+): FigmaMetadataResult {
+    const { useRelativePaths = true, localPath } = options;
+
+    if (!metadata.images || metadata.images.length === 0) {
+        return metadata;
+    }
+
+    if (imagePaths.length !== metadata.images.length) {
+        throw new Error(`Number of image paths (${imagePaths.length}) must match number of images (${metadata.images.length})`);
+    }
+
+    // Create download results from paths and images
+    const downloadResults = imagePaths.map((filePath, index) => ({
+        filePath,
+        finalDimensions: metadata.images![index].finalDimensions,
+        wasCropped: metadata.images![index].wasCropped,
+        cssVariables: metadata.images![index].cssVariables
+    }));
+
+    // Find image assets in the nodes
+    const imageAssets = findImageAssets(metadata.nodes, metadata.globalVars);
+
+    // Enrich nodes with file paths
+    const enrichedNodes = enrichNodesWithImages(
+        metadata.nodes,
+        imageAssets,
+        downloadResults,
+        useRelativePaths,
+        localPath
+    );
+
+    return {
+        ...metadata,
+        nodes: enrichedNodes
+    };
+}
+
 // Helper functions
 
 function sanitizeFileName(name: string): string {
@@ -426,7 +492,7 @@ function enrichNodesWithImages(
 
     imageAssets.forEach((asset, index) => {
         const result = downloadResults[index];
-        if (result) {
+        if (result && result.filePath) {
             // Calculate the path to use based on useRelativePaths option
             let pathForMarkup: string;
 
