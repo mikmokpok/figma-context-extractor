@@ -42,8 +42,10 @@ export interface FigmaMetadataOptions {
 export interface FigmaImageOptions {
     /** Export scale for PNG images (defaults to 2) */
     pngScale?: number;
-    /** The absolute path to the directory where images should be stored */
-    localPath: string;
+    /** The absolute path to the directory where images should be stored (optional if returnBuffer is true) */
+    localPath?: string;
+    /** Return images as ArrayBuffer instead of saving to disk (defaults to false) */
+    returnBuffer?: boolean;
 }
 
 export interface FigmaImageNode {
@@ -70,7 +72,8 @@ export interface FigmaMetadataResult {
 }
 
 export interface FigmaImageResult {
-    filePath: string;
+    filePath?: string;
+    buffer?: ArrayBuffer;
     finalDimensions: { width: number; height: number };
     wasCropped: boolean;
     cssVariables?: string;
@@ -85,14 +88,16 @@ export interface FigmaFrameImageOptions {
     useOAuth?: boolean;
     /** Export scale for PNG images (defaults to 2) */
     pngScale?: number;
-    /** The absolute path to the directory where the image should be stored */
-    localPath: string;
-    /** The filename for the downloaded image (must end with .png or .svg) */
-    fileName: string;
+    /** The absolute path to the directory where the image should be stored (optional if returnBuffer is true) */
+    localPath?: string;
+    /** The filename for the downloaded image (must end with .png or .svg, optional if returnBuffer is true) */
+    fileName?: string;
     /** Image format to download (defaults to 'png') */
     format?: 'png' | 'svg';
     /** Enable JSON debug log files (defaults to false) */
     enableLogging?: boolean;
+    /** Return image as ArrayBuffer instead of saving to disk (defaults to false) */
+    returnBuffer?: boolean;
 }
 
 /**
@@ -232,12 +237,16 @@ export async function downloadFigmaImages(
     nodes: FigmaImageNode[],
     options: FigmaMetadataOptions & FigmaImageOptions
 ): Promise<FigmaImageResult[]> {
-    const { apiKey, oauthToken, useOAuth = false, pngScale = 2, localPath, enableLogging = false } = options;
+    const { apiKey, oauthToken, useOAuth = false, pngScale = 2, localPath, enableLogging = false, returnBuffer = false } = options;
 
     Logger.enableLogging = enableLogging;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");
+    }
+
+    if (!returnBuffer && !localPath) {
+        throw new Error("localPath is required when returnBuffer is false");
     }
 
     const urlMatch = figmaUrl.match(/figma\.com\/(file|design)\/([a-zA-Z0-9]+)/);
@@ -259,8 +268,9 @@ export async function downloadFigmaImages(
             nodeId: node.nodeId.replace(/-/g, ":"),
         }));
 
-        const results = await figmaService.downloadImages(fileKey, localPath, processedNodes, {
+        const results = await figmaService.downloadImages(fileKey, localPath || '', processedNodes, {
             pngScale,
+            returnBuffer
         });
 
         return results;
@@ -289,13 +299,18 @@ export async function downloadFigmaFrameImage(
         localPath,
         fileName,
         format = 'png',
-        enableLogging = false
+        enableLogging = false,
+        returnBuffer = false
     } = options;
 
     Logger.enableLogging = enableLogging;
 
     if (!apiKey && !oauthToken) {
         throw new Error("Either apiKey or oauthToken is required");
+    }
+
+    if (!returnBuffer && (!localPath || !fileName)) {
+        throw new Error("localPath and fileName are required when returnBuffer is false");
     }
 
     const urlMatch = figmaUrl.match(/figma\.com\/(file|design)\/([a-zA-Z0-9]+)/);
@@ -313,10 +328,12 @@ export async function downloadFigmaFrameImage(
 
     const nodeId = nodeIdMatch[1].replace(/-/g, ":");
 
-    // Validate filename extension matches format
-    const expectedExtension = `.${format}`;
-    if (!fileName.toLowerCase().endsWith(expectedExtension)) {
-        throw new Error(`Filename must end with ${expectedExtension} for ${format} format`);
+    // Validate filename extension matches format if provided
+    if (fileName) {
+        const expectedExtension = `.${format}`;
+        if (!fileName.toLowerCase().endsWith(expectedExtension)) {
+            throw new Error(`Filename must end with ${expectedExtension} for ${format} format`);
+        }
     }
 
     const figmaService = new FigmaService({
@@ -330,18 +347,23 @@ export async function downloadFigmaFrameImage(
 
         const imageNode: FigmaImageNode = {
             nodeId,
-            fileName,
+            fileName: fileName || `temp.${format}`,
         };
 
-        const results = await figmaService.downloadImages(fileKey, localPath, [imageNode], {
+        const results = await figmaService.downloadImages(fileKey, localPath || '', [imageNode], {
             pngScale: format === 'png' ? pngScale : undefined,
+            returnBuffer
         });
 
         if (results.length === 0) {
             throw new Error(`Failed to download image for frame ${nodeId}`);
         }
 
-        Logger.log(`Successfully downloaded frame image to: ${results[0].filePath}`);
+        if (returnBuffer) {
+            Logger.log(`Successfully downloaded frame image as buffer`);
+        } else {
+            Logger.log(`Successfully downloaded frame image to: ${results[0].filePath}`);
+        }
         return results[0];
     } catch (error) {
         Logger.error(`Error downloading frame image from ${fileKey}:`, error);

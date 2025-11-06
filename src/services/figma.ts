@@ -137,6 +137,7 @@ export class FigmaService {
    * - PNG vs SVG format (based on filename extension)
    * - Image cropping based on transform matrices
    * - CSS variable generation for image dimensions
+   * - Returning as ArrayBuffer instead of saving to disk
    *
    * @returns Array of local file paths for successfully downloaded images
    */
@@ -151,17 +152,20 @@ export class FigmaService {
       cropTransform?: any;
       requiresImageDimensions?: boolean;
     }>,
-    options: { pngScale?: number; svgOptions?: SvgOptions } = {},
+    options: { pngScale?: number; svgOptions?: SvgOptions; returnBuffer?: boolean } = {},
   ): Promise<ImageProcessingResult[]> {
     if (items.length === 0) return [];
 
-    const sanitizedPath = path.normalize(localPath).replace(/^(\.\.(\/|\\|$))+/, "");
-    const resolvedPath = path.resolve(sanitizedPath);
-    if (!resolvedPath.startsWith(path.resolve(process.cwd()))) {
-      throw new Error("Invalid path specified. Directory traversal is not allowed.");
-    }
+    const { pngScale = 2, svgOptions, returnBuffer = false } = options;
 
-    const { pngScale = 2, svgOptions } = options;
+    let resolvedPath = '';
+    if (!returnBuffer) {
+      const sanitizedPath = path.normalize(localPath).replace(/^(\.\.(\/|\\|$))+/, "");
+      resolvedPath = path.resolve(sanitizedPath);
+      if (!resolvedPath.startsWith(path.resolve(process.cwd()))) {
+        throw new Error("Invalid path specified. Directory traversal is not allowed.");
+      }
+    }
     const downloadPromises: Promise<ImageProcessingResult[]>[] = [];
 
     const imageFills = items.filter(
@@ -183,6 +187,7 @@ export class FigmaService {
               needsCropping,
               cropTransform,
               requiresImageDimensions,
+              returnBuffer,
             )
             : null;
         })
@@ -214,6 +219,7 @@ export class FigmaService {
                 needsCropping,
                 cropTransform,
                 requiresImageDimensions,
+                returnBuffer,
               )
               : null;
           })
@@ -242,6 +248,7 @@ export class FigmaService {
                 needsCropping,
                 cropTransform,
                 requiresImageDimensions,
+                returnBuffer,
               )
               : null;
           })

@@ -4,25 +4,21 @@ import path from "path";
 export type StyleId = `${string}_${string}` & { __brand: "StyleId" };
 
 /**
- * Download Figma image and save it locally
+ * Download Figma image and save it locally or return as buffer
  * @param fileName - The filename to save as
  * @param localPath - The local path to save to
  * @param imageUrl - Image URL (images[nodeId])
- * @returns A Promise that resolves to the full file path where the image was saved
+ * @param returnBuffer - If true, return ArrayBuffer instead of saving to disk
+ * @returns A Promise that resolves to the full file path where the image was saved, or ArrayBuffer if returnBuffer is true
  * @throws Error if download fails
  */
 export async function downloadFigmaImage(
   fileName: string,
   localPath: string,
   imageUrl: string,
-): Promise<string> {
+  returnBuffer: boolean = false,
+): Promise<string | ArrayBuffer> {
   try {
-    if (!fs.existsSync(localPath)) {
-      fs.mkdirSync(localPath, { recursive: true });
-    }
-
-    const fullPath = path.join(localPath, fileName);
-
     const response = await fetch(imageUrl, {
       method: "GET",
     });
@@ -31,12 +27,25 @@ export async function downloadFigmaImage(
       throw new Error(`Failed to download image: ${response.statusText}`);
     }
 
-    const writer = fs.createWriteStream(fullPath);
+    if (returnBuffer) {
+      // Return as ArrayBuffer
+      const arrayBuffer = await response.arrayBuffer();
+      return arrayBuffer;
+    }
+
+    // Save to disk
+    if (!fs.existsSync(localPath)) {
+      fs.mkdirSync(localPath, { recursive: true });
+    }
+
+    const fullPath = path.join(localPath, fileName);
 
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error("Failed to get response body");
     }
+
+    const writer = fs.createWriteStream(fullPath);
 
     return new Promise((resolve, reject) => {
       const processStream = async () => {

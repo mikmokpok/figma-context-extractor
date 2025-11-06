@@ -112,7 +112,8 @@ export async function getImageDimensions(imagePath: string): Promise<{
 }
 
 export type ImageProcessingResult = {
-  filePath: string;
+  filePath?: string;
+  buffer?: ArrayBuffer;
   originalDimensions: { width: number; height: number };
   finalDimensions: { width: number; height: number };
   wasCropped: boolean;
@@ -129,6 +130,7 @@ export type ImageProcessingResult = {
  * @param needsCropping - Whether to apply crop transform
  * @param cropTransform - Transform matrix for cropping
  * @param requiresImageDimensions - Whether to generate dimension metadata
+ * @param returnBuffer - If true, return ArrayBuffer instead of saving to disk
  * @returns Promise<ImageProcessingResult> - Detailed processing information
  */
 export async function downloadAndProcessImage(
@@ -138,13 +140,90 @@ export async function downloadAndProcessImage(
   needsCropping: boolean = false,
   cropTransform?: Transform,
   requiresImageDimensions: boolean = false,
+  returnBuffer: boolean = false,
 ): Promise<ImageProcessingResult> {
   const { Logger } = await import("./logger.js");
   const processingLog: string[] = [];
 
   // First download the original image
   const { downloadFigmaImage } = await import("./common.js");
-  const originalPath = await downloadFigmaImage(fileName, localPath, imageUrl);
+  const downloadResult = await downloadFigmaImage(fileName, localPath, imageUrl, returnBuffer);
+
+  if (returnBuffer && downloadResult instanceof ArrayBuffer) {
+    // When returning buffer, we need to process it with sharp
+    Logger.log(`Downloaded image as buffer (${downloadResult.byteLength} bytes)`);
+
+    let imageBuffer = Buffer.from(downloadResult);
+    let sharpImage = sharp(imageBuffer);
+
+    // Get original dimensions
+    const metadata = await sharpImage.metadata();
+    const originalDimensions = {
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+    };
+    Logger.log(`Original dimensions: ${originalDimensions.width}x${originalDimensions.height}`);
+
+    let wasCropped = false;
+    let cropRegion: { left: number; top: number; width: number; height: number } | undefined;
+    let finalDimensions = originalDimensions;
+
+    // Apply crop transform if needed
+    if (needsCropping && cropTransform) {
+      Logger.log("Applying crop transform to buffer...");
+
+      const scaleX = cropTransform[0]?.[0] ?? 1;
+      const scaleY = cropTransform[1]?.[1] ?? 1;
+      const translateX = cropTransform[0]?.[2] ?? 0;
+      const translateY = cropTransform[1]?.[2] ?? 0;
+
+      const cropLeft = Math.max(0, Math.round(translateX * originalDimensions.width));
+      const cropTop = Math.max(0, Math.round(translateY * originalDimensions.height));
+      const cropWidth = Math.min(
+        originalDimensions.width - cropLeft,
+        Math.round(scaleX * originalDimensions.width),
+      );
+      const cropHeight = Math.min(
+        originalDimensions.height - cropTop,
+        Math.round(scaleY * originalDimensions.height),
+      );
+
+      if (cropWidth > 0 && cropHeight > 0) {
+        cropRegion = { left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight };
+        imageBuffer = await sharpImage
+          .extract({
+            left: cropLeft,
+            top: cropTop,
+            width: cropWidth,
+            height: cropHeight,
+          })
+          .toBuffer();
+
+        wasCropped = true;
+        finalDimensions = { width: cropWidth, height: cropHeight };
+        Logger.log(`Cropped to region: ${cropLeft}, ${cropTop}, ${cropWidth}x${cropHeight}`);
+      }
+    }
+
+    // Generate CSS variables if required
+    let cssVariables: string | undefined;
+    if (requiresImageDimensions) {
+      cssVariables = generateImageCSSVariables(finalDimensions);
+    }
+
+    return {
+      buffer: imageBuffer.buffer.slice(imageBuffer.byteOffset, imageBuffer.byteOffset + imageBuffer.byteLength),
+      originalDimensions,
+      finalDimensions,
+      wasCropped,
+      cropRegion,
+      cssVariables,
+      processingLog,
+    };
+  }
+
+  // File-based processing (original behavior)
+  const originalPath = downloadResult as string;
   Logger.log(`Downloaded original image: ${originalPath}`);
 
   // Get original dimensions before any processing
