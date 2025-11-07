@@ -75,6 +75,7 @@ export interface FigmaMetadataResult {
 }
 
 export interface FigmaImageResult {
+    nodeId?: string;
     filePath?: string;
     buffer?: ArrayBuffer;
     finalDimensions: { width: number; height: number };
@@ -396,18 +397,68 @@ export async function downloadFigmaFrameImage(
 }
 
 /**
+ * Get image node information from metadata
+ * 
+ * Returns an array of objects containing node IDs and names for all images in the metadata.
+ * Use this to create a mapping between node IDs and uploaded URLs.
+ * 
+ * @param metadata - The metadata result from getFigmaMetadata
+ * @returns Array of objects with nodeId and name for each image
+ * 
+ * @example
+ * ```typescript
+ * const imageInfo = getImageNodeInfo(metadata);
+ * // [{ nodeId: '123:456', name: 'icon' }, { nodeId: '789:012', name: 'logo' }]
+ * 
+ * // Upload images and create mapping
+ * const urlMap: Record<string, string> = {};
+ * for (const info of imageInfo) {
+ *   const url = await uploadToS3(metadata.images.find(img => img.nodeId === info.nodeId).buffer);
+ *   urlMap[info.nodeId] = url;
+ * }
+ * 
+ * // Enrich metadata with URLs
+ * const enriched = enrichMetadataWithImages(metadata, urlMap);
+ * ```
+ */
+export function getImageNodeInfo(metadata: FigmaMetadataResult): Array<{ nodeId: string; name: string }> {
+    if (!metadata.images || metadata.images.length === 0) {
+        return [];
+    }
+
+    const imageAssets = findImageAssets(metadata.nodes, metadata.globalVars);
+
+    return imageAssets.map(asset => ({
+        nodeId: asset.id,
+        name: asset.name
+    }));
+}
+
+/**
  * Enrich metadata with saved image file paths
  * 
  * Use this function after saving images from buffers to disk to add file path information to the metadata.
  * 
  * @param metadata - The metadata result from getFigmaMetadata
- * @param imagePaths - Array of file paths corresponding to the images array
+ * @param imagePaths - Array of file paths (ordered) OR object mapping node IDs to paths/URLs
  * @param options - Options for path generation
  * @returns Enriched metadata with downloadedImage properties on nodes
+ * 
+ * @example
+ * ```typescript
+ * // Array format (ordered)
+ * const enriched = enrichMetadataWithImages(metadata, ['/path/to/img1.png', '/path/to/img2.png']);
+ * 
+ * // Object format (keyed by node ID) - useful after uploading to CDN
+ * const enriched = enrichMetadataWithImages(metadata, {
+ *   '123:456': 'https://cdn.example.com/icon.png',
+ *   '789:012': 'https://cdn.example.com/logo.png'
+ * });
+ * ```
  */
 export function enrichMetadataWithImages(
     metadata: FigmaMetadataResult,
-    imagePaths: string[],
+    imagePaths: string[] | Record<string, string>,
     options: {
         useRelativePaths?: boolean | string;
         localPath?: string;
@@ -419,20 +470,43 @@ export function enrichMetadataWithImages(
         return metadata;
     }
 
-    if (imagePaths.length !== metadata.images.length) {
-        throw new Error(`Number of image paths (${imagePaths.length}) must match number of images (${metadata.images.length})`);
-    }
-
-    // Create download results from paths and images
-    const downloadResults = imagePaths.map((filePath, index) => ({
-        filePath,
-        finalDimensions: metadata.images![index].finalDimensions,
-        wasCropped: metadata.images![index].wasCropped,
-        cssVariables: metadata.images![index].cssVariables
-    }));
-
     // Find image assets in the nodes
     const imageAssets = findImageAssets(metadata.nodes, metadata.globalVars);
+
+    let downloadResults: any[];
+
+    // Support both array (ordered) and object (keyed by node ID) formats
+    if (Array.isArray(imagePaths)) {
+        if (imagePaths.length !== metadata.images.length) {
+            throw new Error(`Number of image paths (${imagePaths.length}) must match number of images (${metadata.images.length})`);
+        }
+
+        // Create download results from paths and images (array format)
+        downloadResults = imagePaths.map((filePath, index) => ({
+            filePath,
+            finalDimensions: metadata.images![index].finalDimensions,
+            wasCropped: metadata.images![index].wasCropped,
+            cssVariables: metadata.images![index].cssVariables
+        }));
+    } else {
+        // Object format: match by node ID
+        downloadResults = imageAssets.map((asset) => {
+            const filePath = imagePaths[asset.id];
+            if (!filePath) {
+                throw new Error(`No image path provided for node ID: ${asset.id}`);
+            }
+
+            // Find corresponding image metadata
+            const imageMetadata = metadata.images!.find((img: any) => img.nodeId === asset.id);
+
+            return {
+                filePath,
+                finalDimensions: imageMetadata?.finalDimensions || { width: 0, height: 0 },
+                wasCropped: imageMetadata?.wasCropped || false,
+                cssVariables: imageMetadata?.cssVariables
+            };
+        });
+    }
 
     // Enrich nodes with file paths
     const enrichedNodes = enrichNodesWithImages(

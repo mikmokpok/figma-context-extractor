@@ -220,7 +220,7 @@ export class FigmaService {
                 cropTransform,
                 requiresImageDimensions,
                 returnBuffer,
-              )
+              ).then(result => ({ ...result, nodeId } as ImageProcessingResult))
               : null;
           })
           .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
@@ -249,7 +249,7 @@ export class FigmaService {
                 cropTransform,
                 requiresImageDimensions,
                 returnBuffer,
-              )
+              ).then(result => ({ ...result, nodeId } as ImageProcessingResult))
               : null;
           })
           .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);

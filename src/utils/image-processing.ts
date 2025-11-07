@@ -112,6 +112,7 @@ export async function getImageDimensions(imagePath: string): Promise<{
 }
 
 export type ImageProcessingResult = {
+  nodeId?: string;
   filePath?: string;
   buffer?: ArrayBuffer;
   originalDimensions: { width: number; height: number };
