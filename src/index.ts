@@ -2,6 +2,8 @@ export {
     getFigmaMetadata,
     downloadFigmaImages,
     downloadFigmaFrameImage,
+    enrichMetadataWithImages,
+    getImageNodeInfo,
     type FigmaMetadataOptions,
     type FigmaImageOptions,
     type FigmaFrameImageOptions,
