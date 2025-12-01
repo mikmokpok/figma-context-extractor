@@ -5,8 +5,10 @@ import type {
   GetFileNodesResponse,
   GetImageFillsResponse,
 } from "@figma/rest-api-spec";
-import { downloadFigmaImage } from "~/utils/common.js";
-import { downloadAndProcessImage, type ImageProcessingResult } from "~/utils/image-processing.js";
+import {
+  downloadAndProcessImage,
+  type ImageProcessingResult,
+} from "~/utils/image-processing.js";
 import { Logger, writeLogs } from "~/utils/logger.js";
 import { fetchWithRetry } from "~/utils/fetch-with-retry.js";
 
@@ -51,10 +53,9 @@ export class FigmaService {
     images: { [key: string]: string | null } | undefined,
   ): Record<string, string> {
     if (!images) return {};
-    return Object.fromEntries(Object.entries(images).filter(([, value]) => !!value)) as Record<
-      string,
-      string
-    >;
+    return Object.fromEntries(
+      Object.entries(images).filter(([, value]) => !!value),
+    ) as Record<string, string>;
   }
 
   private async request<T>(endpoint: string): Promise<T> {
@@ -62,11 +63,15 @@ export class FigmaService {
       Logger.log(`Calling ${this.baseUrl}${endpoint}`);
       const headers = this.getAuthHeaders();
 
-      return await fetchWithRetry<T & { status?: number }>(`${this.baseUrl}${endpoint}`, {
-        headers,
-      });
+      return await fetchWithRetry<T & { status?: number }>(
+        `${this.baseUrl}${endpoint}`,
+        {
+          headers,
+        },
+      );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       throw new Error(
         `Failed to make request to Figma API endpoint '${endpoint}': ${errorMessage}`,
       );
@@ -76,7 +81,10 @@ export class FigmaService {
   /**
    * Builds URL query parameters for SVG image requests.
    */
-  private buildSvgQueryParams(svgIds: string[], svgOptions: SvgOptions): string {
+  private buildSvgQueryParams(
+    svgIds: string[],
+    svgOptions: SvgOptions,
+  ): string {
     const params = new URLSearchParams({
       ids: svgIds.join(","),
       format: "svg",
@@ -152,18 +160,26 @@ export class FigmaService {
       cropTransform?: any;
       requiresImageDimensions?: boolean;
     }>,
-    options: { pngScale?: number; svgOptions?: SvgOptions; returnBuffer?: boolean } = {},
+    options: {
+      pngScale?: number;
+      svgOptions?: SvgOptions;
+      returnBuffer?: boolean;
+    } = {},
   ): Promise<ImageProcessingResult[]> {
     if (items.length === 0) return [];
 
     const { pngScale = 2, svgOptions, returnBuffer = false } = options;
 
-    let resolvedPath = '';
+    let resolvedPath = "";
     if (!returnBuffer) {
-      const sanitizedPath = path.normalize(localPath).replace(/^(\.\.(\/|\\|$))+/, "");
+      const sanitizedPath = path
+        .normalize(localPath)
+        .replace(/^(\.\.(\/|\\|$))+/, "");
       resolvedPath = path.resolve(sanitizedPath);
       if (!resolvedPath.startsWith(path.resolve(process.cwd()))) {
-        throw new Error("Invalid path specified. Directory traversal is not allowed.");
+        throw new Error(
+          "Invalid path specified. Directory traversal is not allowed.",
+        );
       }
     }
     const downloadPromises: Promise<ImageProcessingResult[]>[] = [];
@@ -177,10 +193,22 @@ export class FigmaService {
     if (imageFills.length > 0) {
       const fillUrls = await this.getImageFillUrls(fileKey);
       const fillDownloads = imageFills
-        .map(({ imageRef, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-          const imageUrl = fillUrls[imageRef];
-          return imageUrl
-            ? downloadAndProcessImage(
+        .map(
+          ({
+            imageRef,
+            fileName,
+            needsCropping,
+            cropTransform,
+            requiresImageDimensions,
+          }) => {
+            const imageUrl = fillUrls[imageRef];
+            if (!imageUrl) {
+              Logger.log(
+                `Skipping image fill with missing URL for imageRef: ${imageRef}`,
+              );
+              return null;
+            }
+            return downloadAndProcessImage(
               fileName,
               resolvedPath,
               imageUrl,
@@ -188,10 +216,13 @@ export class FigmaService {
               cropTransform,
               requiresImageDimensions,
               returnBuffer,
-            )
-            : null;
-        })
-        .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
+            );
+          },
+        )
+        .filter(
+          (promise): promise is Promise<ImageProcessingResult> =>
+            promise !== null,
+        );
 
       if (fillDownloads.length > 0) {
         downloadPromises.push(Promise.all(fillDownloads));
@@ -199,8 +230,12 @@ export class FigmaService {
     }
 
     if (renderNodes.length > 0) {
-      const pngNodes = renderNodes.filter((node) => !node.fileName.toLowerCase().endsWith(".svg"));
-      const svgNodes = renderNodes.filter((node) => node.fileName.toLowerCase().endsWith(".svg"));
+      const pngNodes = renderNodes.filter(
+        (node) => !node.fileName.toLowerCase().endsWith(".svg"),
+      );
+      const svgNodes = renderNodes.filter((node) =>
+        node.fileName.toLowerCase().endsWith(".svg"),
+      );
       if (pngNodes.length > 0) {
         const pngUrls = await this.getNodeRenderUrls(
           fileKey,
@@ -209,10 +244,22 @@ export class FigmaService {
           { pngScale },
         );
         const pngDownloads = pngNodes
-          .map(({ nodeId, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-            const imageUrl = pngUrls[nodeId];
-            return imageUrl
-              ? downloadAndProcessImage(
+          .map(
+            ({
+              nodeId,
+              fileName,
+              needsCropping,
+              cropTransform,
+              requiresImageDimensions,
+            }) => {
+              const imageUrl = pngUrls[nodeId];
+              if (!imageUrl) {
+                Logger.log(
+                  `Skipping PNG render with missing URL for nodeId: ${nodeId}`,
+                );
+                return null;
+              }
+              return downloadAndProcessImage(
                 fileName,
                 resolvedPath,
                 imageUrl,
@@ -220,10 +267,15 @@ export class FigmaService {
                 cropTransform,
                 requiresImageDimensions,
                 returnBuffer,
-              ).then(result => ({ ...result, nodeId } as ImageProcessingResult))
-              : null;
-          })
-          .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
+              ).then(
+                (result) => ({ ...result, nodeId }) as ImageProcessingResult,
+              );
+            },
+          )
+          .filter(
+            (promise): promise is Promise<ImageProcessingResult> =>
+              promise !== null,
+          );
 
         if (pngDownloads.length > 0) {
           downloadPromises.push(Promise.all(pngDownloads));
@@ -238,10 +290,22 @@ export class FigmaService {
           { svgOptions },
         );
         const svgDownloads = svgNodes
-          .map(({ nodeId, fileName, needsCropping, cropTransform, requiresImageDimensions }) => {
-            const imageUrl = svgUrls[nodeId];
-            return imageUrl
-              ? downloadAndProcessImage(
+          .map(
+            ({
+              nodeId,
+              fileName,
+              needsCropping,
+              cropTransform,
+              requiresImageDimensions,
+            }) => {
+              const imageUrl = svgUrls[nodeId];
+              if (!imageUrl) {
+                Logger.log(
+                  `Skipping SVG render with missing URL for nodeId: ${nodeId}`,
+                );
+                return null;
+              }
+              return downloadAndProcessImage(
                 fileName,
                 resolvedPath,
                 imageUrl,
@@ -249,10 +313,15 @@ export class FigmaService {
                 cropTransform,
                 requiresImageDimensions,
                 returnBuffer,
-              ).then(result => ({ ...result, nodeId } as ImageProcessingResult))
-              : null;
-          })
-          .filter((promise): promise is Promise<ImageProcessingResult> => promise !== null);
+              ).then(
+                (result) => ({ ...result, nodeId }) as ImageProcessingResult,
+              );
+            },
+          )
+          .filter(
+            (promise): promise is Promise<ImageProcessingResult> =>
+              promise !== null,
+          );
 
         if (svgDownloads.length > 0) {
           downloadPromises.push(Promise.all(svgDownloads));
@@ -267,9 +336,14 @@ export class FigmaService {
   /**
    * Get raw Figma API response for a file (for use with flexible extractors)
    */
-  async getRawFile(fileKey: string, depth?: number | null): Promise<GetFileResponse> {
+  async getRawFile(
+    fileKey: string,
+    depth?: number | null,
+  ): Promise<GetFileResponse> {
     const endpoint = `/files/${fileKey}${depth ? `?depth=${depth}` : ""}`;
-    Logger.log(`Retrieving raw Figma file: ${fileKey} (depth: ${depth ?? "default"})`);
+    Logger.log(
+      `Retrieving raw Figma file: ${fileKey} (depth: ${depth ?? "default"})`,
+    );
 
     const response = await this.request<GetFileResponse>(endpoint);
     writeLogs("figma-raw.json", response);

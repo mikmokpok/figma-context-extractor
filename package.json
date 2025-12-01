@@ -1,69 +1,69 @@
 {
-    "name": "figma-metadata-extractor",
-    "version": "1.0.11",
-    "description": "Extract metadata and download images from Figma files. A standalone library for accessing Figma design data and downloading frame images programmatically.",
-    "type": "module",
-    "main": "dist/index.cjs",
-    "module": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js",
-            "require": "./dist/index.cjs"
-        }
-    },
-    "files": [
-        "dist",
-        "README.md",
-        "example.js"
-    ],
-    "scripts": {
-        "build": "vite build && tsc --project tsconfig.declarations.json",
-        "typecheck": "tsc --noEmit",
-        "test": "jest",
-        "dev": "vite build --watch",
-        "lint": "eslint .",
-        "format": "prettier --write \"src/**/*.ts\"",
-        "prepack": "npm run build"
-    },
-    "engines": {
-        "node": ">=18.0.0"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/mikmokpok/figma-context-extractor.git"
-    },
-    "keywords": [
-        "figma",
-        "design",
-        "metadata",
-        "extractor",
-        "typescript",
-        "api",
-        "images"
-    ],
-    "author": "",
-    "license": "MIT",
-    "dependencies": {
-        "@figma/rest-api-spec": "^0.33.0",
-        "js-yaml": "^4.1.0",
-        "remeda": "^2.20.1",
-        "sharp": "^0.34.3",
-        "zod": "^3.24.2"
-    },
-    "devDependencies": {
-        "@types/jest": "^29.5.14",
-        "@types/js-yaml": "^4.0.9",
-        "@types/node": "^20.17.0",
-        "@typescript-eslint/eslint-plugin": "^8.24.0",
-        "@typescript-eslint/parser": "^8.24.0",
-        "eslint": "^9.20.1",
-        "eslint-config-prettier": "^10.0.1",
-        "jest": "^29.7.0",
-        "prettier": "^3.5.0",
-        "ts-jest": "^29.2.5",
-        "typescript": "^5.7.3",
-        "vite": "^6.4.1"
+  "name": "figma-metadata-extractor",
+  "version": "1.0.12",
+  "description": "Extract metadata and download images from Figma files. A standalone library for accessing Figma design data and downloading frame images programmatically.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "example.js"
+  ],
+  "scripts": {
+    "build": "vite build && tsc --project tsconfig.declarations.json",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "dev": "vite build --watch",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikmokpok/figma-context-extractor.git"
+  },
+  "keywords": [
+    "figma",
+    "design",
+    "metadata",
+    "extractor",
+    "typescript",
+    "api",
+    "images"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@figma/rest-api-spec": "^0.33.0",
+    "js-yaml": "^4.1.0",
+    "remeda": "^2.20.1",
+    "sharp": "^0.34.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.17.0",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.1"
+  }
 }
