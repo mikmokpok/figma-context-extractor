@@ -18,18 +18,30 @@ export async function downloadFigmaImage(
   imageUrl: string,
   returnBuffer: boolean = false,
 ): Promise<string | ArrayBuffer> {
+  const { pipeline } = await import("stream/promises");
+  const { Readable } = await import("stream");
+
   try {
     const response = await fetch(imageUrl, {
       method: "GET",
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`);
+      throw new Error(
+        `Failed to download image: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    if (!response.body) {
+      throw new Error("Response body is empty");
     }
 
     if (returnBuffer) {
       // Return as ArrayBuffer
       const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error("Downloaded image buffer is empty");
+      }
       return arrayBuffer;
     }
 
@@ -39,44 +51,20 @@ export async function downloadFigmaImage(
     }
 
     const fullPath = path.join(localPath, fileName);
+    const fileStream = fs.createWriteStream(fullPath);
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("Failed to get response body");
+    // Use pipeline to correctly handle stream events and errors
+    // @ts-ignore - Readable.fromWeb is available in Node 18+
+    await pipeline(Readable.fromWeb(response.body), fileStream);
+
+    // Verify file exists and is not empty
+    const stats = fs.statSync(fullPath);
+    if (stats.size === 0) {
+      fs.unlinkSync(fullPath); // Delete empty file
+      throw new Error("Downloaded file is empty (0 bytes)");
     }
 
-    const writer = fs.createWriteStream(fullPath);
-
-    return new Promise((resolve, reject) => {
-      const processStream = async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              writer.end();
-              break;
-            }
-            writer.write(value);
-          }
-        } catch (err) {
-          writer.end();
-          fs.unlink(fullPath, () => { });
-          reject(err);
-        }
-      };
-
-      writer.on("finish", () => {
-        resolve(fullPath);
-      });
-
-      writer.on("error", (err) => {
-        reader.cancel();
-        fs.unlink(fullPath, () => { });
-        reject(new Error(`Failed to write image: ${err.message}`));
-      });
-
-      processStream();
-    });
+    return fullPath;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`Error downloading image: ${errorMessage}`);
@@ -209,4 +197,52 @@ export function pixelRound(num: number): number {
     throw new TypeError(`Input must be a valid number`);
   }
   return Number(Number(num).toFixed(2));
+}
+
+/**
+ * Run a list of async tasks with a concurrency limit
+ * @param tasks - Array of functions that return a Promise
+ * @param limit - Maximum number of concurrent tasks
+ * @returns Promise resolving to array of results
+ */
+export async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+
+  return new Promise((resolve, reject) => {
+    if (tasks.length === 0) {
+      resolve([]);
+      return;
+    }
+
+    let completed = 0;
+    let launched = 0;
+    let failed = false;
+
+    const next = () => {
+      if (failed) return;
+      if (completed === tasks.length) {
+        resolve(results);
+        return;
+      }
+
+      while (launched < tasks.length && launched - completed < limit) {
+        const index = launched++;
+        tasks[index]()
+          .then((result) => {
+            results[index] = result;
+            completed++;
+            next();
+          })
+          .catch((err) => {
+            failed = true;
+            reject(err);
+          });
+      }
+    };
+
+    next();
+  });
 }

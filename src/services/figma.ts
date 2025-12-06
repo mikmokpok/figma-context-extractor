@@ -11,6 +11,7 @@ import {
 } from "~/utils/image-processing.js";
 import { Logger, writeLogs } from "~/utils/logger.js";
 import { fetchWithRetry } from "~/utils/fetch-with-retry.js";
+import { runWithConcurrency } from "~/utils/common.js";
 
 export type FigmaAuthOptions = {
   figmaApiKey: string;
@@ -169,6 +170,7 @@ export class FigmaService {
     if (items.length === 0) return [];
 
     const { pngScale = 2, svgOptions, returnBuffer = false } = options;
+    const CONCURRENCY_LIMIT = 10;
 
     let resolvedPath = "";
     if (!returnBuffer) {
@@ -192,7 +194,7 @@ export class FigmaService {
     );
     if (imageFills.length > 0) {
       const fillUrls = await this.getImageFillUrls(fileKey);
-      const fillDownloads = imageFills
+      const fillTasks = imageFills
         .map(
           ({
             imageRef,
@@ -208,24 +210,24 @@ export class FigmaService {
               );
               return null;
             }
-            return downloadAndProcessImage(
-              fileName,
-              resolvedPath,
-              imageUrl,
-              needsCropping,
-              cropTransform,
-              requiresImageDimensions,
-              returnBuffer,
-            );
+            return () =>
+              downloadAndProcessImage(
+                fileName,
+                resolvedPath,
+                imageUrl,
+                needsCropping,
+                cropTransform,
+                requiresImageDimensions,
+                returnBuffer,
+              );
           },
         )
         .filter(
-          (promise): promise is Promise<ImageProcessingResult> =>
-            promise !== null,
+          (task): task is () => Promise<ImageProcessingResult> => task !== null,
         );
 
-      if (fillDownloads.length > 0) {
-        downloadPromises.push(Promise.all(fillDownloads));
+      if (fillTasks.length > 0) {
+        downloadPromises.push(runWithConcurrency(fillTasks, CONCURRENCY_LIMIT));
       }
     }
 
@@ -243,7 +245,7 @@ export class FigmaService {
           "png",
           { pngScale },
         );
-        const pngDownloads = pngNodes
+        const pngTasks = pngNodes
           .map(
             ({
               nodeId,
@@ -259,26 +261,29 @@ export class FigmaService {
                 );
                 return null;
               }
-              return downloadAndProcessImage(
-                fileName,
-                resolvedPath,
-                imageUrl,
-                needsCropping,
-                cropTransform,
-                requiresImageDimensions,
-                returnBuffer,
-              ).then(
-                (result) => ({ ...result, nodeId }) as ImageProcessingResult,
-              );
+              return () =>
+                downloadAndProcessImage(
+                  fileName,
+                  resolvedPath,
+                  imageUrl,
+                  needsCropping,
+                  cropTransform,
+                  requiresImageDimensions,
+                  returnBuffer,
+                ).then(
+                  (result) => ({ ...result, nodeId }) as ImageProcessingResult,
+                );
             },
           )
           .filter(
-            (promise): promise is Promise<ImageProcessingResult> =>
-              promise !== null,
+            (task): task is () => Promise<ImageProcessingResult> =>
+              task !== null,
           );
 
-        if (pngDownloads.length > 0) {
-          downloadPromises.push(Promise.all(pngDownloads));
+        if (pngTasks.length > 0) {
+          downloadPromises.push(
+            runWithConcurrency(pngTasks, CONCURRENCY_LIMIT),
+          );
         }
       }
 
@@ -289,7 +294,7 @@ export class FigmaService {
           "svg",
           { svgOptions },
         );
-        const svgDownloads = svgNodes
+        const svgTasks = svgNodes
           .map(
             ({
               nodeId,
@@ -305,26 +310,29 @@ export class FigmaService {
                 );
                 return null;
               }
-              return downloadAndProcessImage(
-                fileName,
-                resolvedPath,
-                imageUrl,
-                needsCropping,
-                cropTransform,
-                requiresImageDimensions,
-                returnBuffer,
-              ).then(
-                (result) => ({ ...result, nodeId }) as ImageProcessingResult,
-              );
+              return () =>
+                downloadAndProcessImage(
+                  fileName,
+                  resolvedPath,
+                  imageUrl,
+                  needsCropping,
+                  cropTransform,
+                  requiresImageDimensions,
+                  returnBuffer,
+                ).then(
+                  (result) => ({ ...result, nodeId }) as ImageProcessingResult,
+                );
             },
           )
           .filter(
-            (promise): promise is Promise<ImageProcessingResult> =>
-              promise !== null,
+            (task): task is () => Promise<ImageProcessingResult> =>
+              task !== null,
           );
 
-        if (svgDownloads.length > 0) {
-          downloadPromises.push(Promise.all(svgDownloads));
+        if (svgTasks.length > 0) {
+          downloadPromises.push(
+            runWithConcurrency(svgTasks, CONCURRENCY_LIMIT),
+          );
         }
       }
     }
